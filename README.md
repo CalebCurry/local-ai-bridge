@@ -25,14 +25,16 @@ Work autonomously and verify the complete Codex → MCP → DeepSeek Harness →
 1. Inspect my OS, shell, Python, Node.js, Codex, DeepSeek Harness, and local model runtimes before changing anything.
 2. Clone the repository into an appropriate development directory, read its README, create a Python virtual environment, and install the package.
 3. If DeepSeek Harness is missing, install it using its current official instructions. Do not overwrite existing Harness settings, credentials, sessions, or model-provider configuration.
-4. Find my existing local OpenAI-compatible model endpoint and model ID when possible. If no working endpoint/model can be identified, ask me one concise question for those values instead of guessing or downloading a large model.
-5. Configure DeepSeek Harness so its headless profile uses the local model. Confirm a harmless headless prompt succeeds.
-6. Create ~/.config/local-bridge/config.toml with the correct dsh_command. Keep the other defaults unless my environment requires different values.
-7. Run local-bridge doctor and fix any failures.
-8. Register the bridge in Codex as the local-worker STDIO MCP server. Preserve unrelated ~/.codex/config.toml settings. Configure startup_timeout_sec = 10, tool_timeout_sec = 7200, enable only delegate_local, and set its output_token_limit = 5000.
-9. Merge the repository's templates/AGENTS.md guidance into my global ~/.codex/AGENTS.md without overwriting existing instructions.
-10. Run an end-to-end, read-only delegation smoke test from a fresh Codex session. Do not modify a real project during the smoke test.
-11. Report what you installed or changed, exact config paths, test results, and anything I still need to do. Never print secrets or credential-file contents.
+4. Prefer llama.cpp as the local inference runtime. First look for an existing llama.cpp server and compatible local GGUF coding model. If llama.cpp is not installed and no suitable runtime is already working, install it using its current official instructions. Start it on localhost with an OpenAI-compatible endpoint, tool calling enabled, and a stable model alias.
+5. LM Studio and Ollama are supported alternatives. If I already have a healthy LM Studio or Ollama endpoint and model, preserve and use it instead of forcing a migration. If llama.cpp is unsuitable for my platform, offer LM Studio first and Ollama second.
+6. Never download a large model without asking me first. If no working endpoint/model can be identified, ask me one concise question that includes the llama.cpp recommendation and the LM Studio/Ollama alternatives.
+7. Configure DeepSeek Harness so its headless profile uses the chosen local model. Confirm a harmless headless prompt succeeds.
+8. Create ~/.config/local-bridge/config.toml with the correct dsh_command. Keep the other defaults unless my environment requires different values.
+9. Run local-bridge doctor and fix any failures.
+10. Register the bridge in Codex as the local-worker STDIO MCP server. Preserve unrelated ~/.codex/config.toml settings. Configure startup_timeout_sec = 10, tool_timeout_sec = 7200, enable only delegate_local, and set its output_token_limit = 5000.
+11. Merge the repository's templates/AGENTS.md guidance into my global ~/.codex/AGENTS.md without overwriting existing instructions.
+12. Run an end-to-end, read-only delegation smoke test from a fresh Codex session. Do not modify a real project during the smoke test.
+13. Report what you installed or changed, exact config paths, selected runtime/endpoint/model, test results, and anything I still need to do. Never print secrets or credential-file contents.
 ```
 
 The agent should only need your input when it cannot identify a working local endpoint and model automatically.
@@ -41,7 +43,88 @@ The agent should only need your input when it cannot identify a working local en
 
 You need Python 3.11+, Node.js, Codex, a local OpenAI-compatible model endpoint, and Git.
 
-### 1. Install and configure DeepSeek Harness
+### 1. Start a local model server
+
+#### Recommended: llama.cpp
+
+[llama.cpp](https://github.com/ggml-org/llama.cpp) is the default recommendation because it is lightweight, cross-platform, supports GGUF models, exposes OpenAI-compatible endpoints, and supports tool calling. Install it using [llama.cpp's current installation options](https://github.com/ggml-org/llama.cpp#quick-start), then start a server with a local GGUF model:
+
+```bash
+llama serve \
+  --model /absolute/path/to/model.gguf \
+  --alias local-coder \
+  --host 127.0.0.1 \
+  --port 8080 \
+  --jinja
+```
+
+You can also let llama.cpp fetch a compatible GGUF model from Hugging Face:
+
+```bash
+llama serve \
+  -hf <organization>/<model-repository>:<quantization> \
+  --alias local-coder \
+  --host 127.0.0.1 \
+  --port 8080 \
+  --jinja
+```
+
+For example, choose a GPT-OSS 20B GGUF quantization that fits your hardware. Model downloads can be large, so select the model and quantization intentionally.
+
+Harness values:
+
+- Base URL: `http://127.0.0.1:8080/v1`
+- Model ID: `local-coder`
+- API type: OpenAI-compatible chat completions
+- API key: a non-secret placeholder if Harness requires one
+
+The `--jinja` flag enables OpenAI-style function/tool calling for compatible model templates. Keep the server bound to `127.0.0.1` unless you intentionally secure and expose it to a network.
+
+#### Alternative: LM Studio
+
+Load a tool-capable coding model in LM Studio, then enable the server from its Developer tab or run:
+
+```bash
+lms server start --port 1234
+```
+
+Harness values:
+
+- Base URL: `http://127.0.0.1:1234/v1`
+- Model ID: the identifier shown by LM Studio for the loaded model
+- API type: OpenAI-compatible chat completions
+
+See [LM Studio's local server documentation](https://lmstudio.ai/docs/developer/core/server).
+
+#### Alternative: Ollama
+
+Install Ollama, pull a tool-capable coding model, and ensure its server is running:
+
+```bash
+ollama pull gpt-oss:20b
+ollama serve
+```
+
+Harness values:
+
+- Base URL: `http://127.0.0.1:11434/v1`
+- Model ID: `gpt-oss:20b` or the model you pulled
+- API type: OpenAI-compatible chat completions
+- API key: `ollama` if Harness requires one; Ollama ignores it locally
+
+See Ollama's [OpenAI compatibility documentation](https://docs.ollama.com/api/openai-compatibility).
+
+Whichever runtime you use, verify its model list before continuing:
+
+```bash
+curl http://127.0.0.1:8080/v1/models   # llama.cpp
+curl http://127.0.0.1:1234/v1/models   # LM Studio
+curl http://127.0.0.1:11434/v1/models  # Ollama
+```
+
+Only one of these servers is required.
+
+### 2. Install and configure DeepSeek Harness
 
 The official Harness quickstart uses `npx`:
 
@@ -49,7 +132,7 @@ The official Harness quickstart uses `npx`:
 npx @deepseek-ai/dsh web
 ```
 
-This opens the Harness UI. In its model settings, add your local provider and select its model as the default. The exact URL and model ID come from your runtime—for example, LM Studio often uses `http://127.0.0.1:1234/v1`, while a llama.cpp server uses the address you chose when starting it.
+This opens the Harness UI. In its model settings, add the llama.cpp provider using the values above and select its model as the default. If you chose LM Studio or Ollama, use that alternative's URL and model ID instead.
 
 Required Harness state:
 
@@ -66,7 +149,7 @@ npx @deepseek-ai/dsh --profile headless "Reply with exactly: LOCAL_OK"
 
 See the [DeepSeek Harness repository](https://github.com/deepseek-ai/deepseek-harness) for its current installation and safety guidance.
 
-### 2. Install Local Bridge
+### 3. Install Local Bridge
 
 ```bash
 git clone https://github.com/CalebCurry/local-ai-bridge.git local-ai-bridge
@@ -92,7 +175,7 @@ Check the installation:
 ./.venv/bin/local-bridge doctor
 ```
 
-### 3. Connect Codex
+### 4. Connect Codex
 
 From the repository directory, register the bridge as a local STDIO MCP server:
 
