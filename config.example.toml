@@ -1,0 +1,17 @@
+[local_bridge]
+
+# Optional. Command used to launch DeepSeek Harness.
+# The default is "dsh". This can also contain arguments, for example:
+# dsh_command = "npx @deepseek-ai/dsh"
+dsh_command = "dsh"
+
+# Optional. Shipped Harness profile used for one-shot coding tasks.
+profile = "headless"
+
+# Optional. Default wall-clock limit for one delegation.
+default_timeout_minutes = 30
+
+# Optional. Maximum number of final-result characters returned to Codex.
+# Harness reasoning and tool logs are not returned on successful runs.
+max_result_characters = 16000
+
