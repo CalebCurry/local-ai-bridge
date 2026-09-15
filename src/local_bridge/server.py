@@ -19,7 +19,7 @@ SERVER_VERSION = "0.1.0"
 
 
 def worker_prompt(task: str) -> str:
-    return f"""You are the local implementation worker delegated by Codex.
+    return f"""You are the local implementation worker delegated by a parent coding agent.
 
 TASK
 {task.strip()}
@@ -179,7 +179,7 @@ def response_for(config: Config, request: dict[str, Any]) -> dict[str, Any] | No
                 "instructions": (
                     "Use delegate_local for routine, token-heavy coding execution. Send one "
                     "complete task, then inspect the resulting diff and concise report. Keep "
-                    "ambiguous architecture and security-sensitive judgment in Codex."
+                    "ambiguous architecture and security-sensitive judgment in the parent agent."
                 ),
             },
         }
@@ -231,4 +231,3 @@ def serve(config: Config, input_stream: TextIO = sys.stdin, output_stream: TextI
                 "error": {"code": -32603, "message": f"Internal error: {exc}"},
             }
             print(json.dumps(error, separators=(",", ":")), file=output_stream, flush=True)
-

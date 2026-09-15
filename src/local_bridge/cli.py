@@ -82,7 +82,7 @@ def print_config(config: Config) -> None:
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(
         prog="local-bridge",
-        description="Expose a DeepSeek Harness coding agent to Codex over MCP.",
+        description="Expose a DeepSeek Harness coding agent to a parent agent over MCP.",
     )
     result.add_argument("--version", action="version", version=__version__)
     result.add_argument(

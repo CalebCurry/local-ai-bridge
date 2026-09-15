@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "codex-local-bridge"
+name = "local-ai-bridge"
 version = "0.1.0"
-description = "An MCP bridge that lets Codex delegate coding work to a local DeepSeek Harness agent."
+description = "An MCP bridge that lets frontier coding agents delegate work to a local DeepSeek Harness agent."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -25,4 +25,3 @@ local-bridge = "local_bridge.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-

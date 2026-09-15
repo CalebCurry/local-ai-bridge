@@ -11,7 +11,6 @@ profile = "headless"
 # Optional. Default wall-clock limit for one delegation.
 default_timeout_minutes = 30
 
-# Optional. Maximum number of final-result characters returned to Codex.
+# Optional. Maximum number of final-result characters returned to the parent agent.
 # Harness reasoning and tool logs are not returned on successful runs.
 max_result_characters = 16000
-

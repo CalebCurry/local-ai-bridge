@@ -1,23 +1,25 @@
-# Codex Local Bridge
+# Local AI Bridge
 
-Codex Local Bridge lets Codex act as the high-level engineering lead while a local model performs the token-heavy coding work. It exposes DeepSeek Harness as one MCP tool that can inspect a repository, edit files, run tests, fix failures, and return only a short final report to Codex.
+Local AI Bridge lets Codex, Claude Code, or another MCP-capable coding agent act as the high-level engineering lead while a local model performs the token-heavy work. It exposes DeepSeek Harness as one MCP tool that can inspect a repository, edit files, run tests, fix failures, and return only a short final report.
 
 ```text
-You → Codex → delegate_local → DeepSeek Harness → local model
-                         ← short PASS/ESCALATE report ←
+You → Codex or Claude Code → delegate_local → DeepSeek Harness → local model
+                                      ← short PASS/ESCALATE report ←
 ```
 
-The local model keeps its exploration, command output, and repair loops in its own Harness process. Codex receives the final result and can review the resulting diff without ingesting the worker's full transcript.
+The bridge is not tied to Codex. Its runtime speaks standard MCP over stdio; only the one-time MCP registration command and persistent instruction file differ between Codex and Claude Code. The local model keeps its exploration, command output, and repair loops in its own Harness process, while the parent agent receives the result and reviews the diff without ingesting the worker's full transcript.
 
 > [!WARNING]
 > DeepSeek Harness is currently a developer preview and may make compatibility-breaking changes. The local worker can execute commands and modify files with your user permissions. Use source control and review its changes.
 
-## Have your coding agent set it up
+## Have your agent set it up
 
-Copy and paste this into Codex or another coding agent running on the computer where your local model is hosted:
+Choose your parent agent and paste the matching prompt into it. Each prompt installs the same bridge and local worker.
+
+### Codex setup prompt
 
 ```text
-Set up Codex Local Bridge for me from:
+Set up Local AI Bridge for me, using Codex as the parent agent, from:
 https://github.com/CalebCurry/local-ai-bridge
 
 Work autonomously and verify the complete Codex → MCP → DeepSeek Harness → local-model path.
@@ -37,11 +39,34 @@ Work autonomously and verify the complete Codex → MCP → DeepSeek Harness →
 13. Report what you installed or changed, exact config paths, selected runtime/endpoint/model, test results, and anything I still need to do. Never print secrets or credential-file contents.
 ```
 
-The agent should only need your input when it cannot identify a working local endpoint and model automatically.
+### Claude Code setup prompt
+
+```text
+Set up Local AI Bridge for me, using Claude Code as the parent agent, from:
+https://github.com/CalebCurry/local-ai-bridge
+
+Work autonomously and verify the complete Claude Code → MCP → DeepSeek Harness → local-model path.
+
+1. Inspect my OS, shell, Python, Node.js, Claude Code, DeepSeek Harness, and local model runtimes before changing anything.
+2. Clone the repository into an appropriate development directory, read its README, create a Python virtual environment, and install the package.
+3. If DeepSeek Harness is missing, install it using its current official instructions. Do not overwrite existing Harness settings, credentials, sessions, or model-provider configuration.
+4. Prefer llama.cpp as the local inference runtime. First look for an existing llama.cpp server and compatible local GGUF coding model. If llama.cpp is not installed and no suitable runtime is already working, install it using its current official instructions. Start it on localhost with an OpenAI-compatible endpoint, tool calling enabled, and a stable model alias.
+5. LM Studio and Ollama are supported alternatives. If I already have a healthy LM Studio or Ollama endpoint and model, preserve and use it instead of forcing a migration. If llama.cpp is unsuitable for my platform, offer LM Studio first and Ollama second.
+6. Never download a large model without asking me first. If no working endpoint/model can be identified, ask me one concise question that includes the llama.cpp recommendation and the LM Studio/Ollama alternatives.
+7. Configure DeepSeek Harness so its headless profile uses the chosen local model. Confirm a harmless headless prompt succeeds.
+8. Create ~/.config/local-bridge/config.toml with the correct dsh_command. Keep the other defaults unless my environment requires different values.
+9. Run local-bridge doctor and fix any failures.
+10. Register the bridge in Claude Code as a user-scoped local-worker STDIO MCP server. Preserve all unrelated Claude settings.
+11. Merge the repository's templates/CLAUDE.md guidance into my global ~/.claude/CLAUDE.md without overwriting existing instructions.
+12. Run an end-to-end, read-only delegation smoke test from a fresh Claude Code session. Do not modify a real project during the smoke test.
+13. Report what you installed or changed, exact config paths, selected runtime/endpoint/model, test results, and anything I still need to do. Never print secrets or credential-file contents.
+```
+
+The agent should only need your input when it cannot identify a working local endpoint and model automatically, or before downloading a large model.
 
 ## Quickstart
 
-You need Python 3.11+, Node.js, Codex, a local OpenAI-compatible model endpoint, and Git.
+You need Python 3.11+, Node.js, Git, either Codex or Claude Code, and a local OpenAI-compatible model endpoint.
 
 ### 1. Start a local model server
 
@@ -175,7 +200,11 @@ Check the installation:
 ./.venv/bin/local-bridge doctor
 ```
 
-### 4. Connect Codex
+### 4. Connect your parent agent
+
+Choose one option. You do not need to configure both.
+
+#### Option A: Codex
 
 From the repository directory, register the bridge as a local STDIO MCP server:
 
@@ -209,7 +238,25 @@ Ask Codex to try it:
 
 > Use `local-worker` to inspect this repository and run a harmless read-only smoke test. Do not modify files.
 
-That is the minimum working setup.
+#### Option B: Claude Code
+
+From the repository directory, register the bridge as a user-scoped local STDIO MCP server:
+
+```bash
+claude mcp add --transport stdio --scope user local-worker -- "$PWD/.venv/bin/local-bridge" serve
+```
+
+Verify the registration:
+
+```bash
+claude mcp get local-worker
+```
+
+Start a fresh Claude Code session and run `/mcp` to check the server status. Then ask Claude Code to try it:
+
+> Use `local-worker` to inspect this repository and run a harmless read-only smoke test. Do not modify files.
+
+That is the minimum working setup for either parent agent.
 
 ## Configuration
 
@@ -219,7 +266,7 @@ Local Bridge reads `~/.config/local-bridge/config.toml`. Set `LOCAL_BRIDGE_CONFI
 export LOCAL_BRIDGE_CONFIG=/absolute/path/to/config.toml
 ```
 
-No Local Bridge configuration file is required if all defaults fit your environment. The task and absolute working directory are required on each MCP tool call; Codex supplies those automatically.
+No Local Bridge configuration file is required if all defaults fit your environment. The task and absolute working directory are required on each MCP tool call; the parent agent supplies those automatically.
 
 ```toml
 [local_bridge]
@@ -233,8 +280,8 @@ max_result_characters = 16000
 |---|---:|---|---|
 | `dsh_command` | Optional | `dsh` | Command used to start Harness. It may include arguments, such as `npx @deepseek-ai/dsh`, or be an absolute executable path. |
 | `profile` | Optional | `headless` | Harness profile used for each one-shot delegated task. The shipped `headless` profile is recommended. |
-| `default_timeout_minutes` | Optional | `30` | Default wall-clock limit for one delegated task. Codex may request a different value, capped at 120 minutes. |
-| `max_result_characters` | Optional | `16000` | Maximum final-answer characters returned to Codex. Successful Harness reasoning and tool logs are discarded. |
+| `default_timeout_minutes` | Optional | `30` | Default wall-clock limit for one delegated task. The parent agent may request a different value, capped at 120 minutes. |
+| `max_result_characters` | Optional | `16000` | Maximum final-answer characters returned to the parent agent. Successful Harness reasoning and tool logs are discarded. |
 
 External requirements that configuration cannot replace:
 
@@ -244,7 +291,7 @@ External requirements that configuration cannot replace:
 | A working `dsh` or `npx @deepseek-ai/dsh` command | Required |
 | A running local OpenAI-compatible model endpoint | Required |
 | A Harness provider and default model | Required |
-| Global local-first Codex instructions | Optional |
+| Global local-first parent-agent instructions | Optional |
 
 Print the effective configuration:
 
@@ -258,15 +305,29 @@ Validate the Harness executable and profile configuration:
 local-bridge doctor
 ```
 
-## Make Codex prefer the local worker
+## Make your parent agent prefer the local worker
 
-Installing the MCP server makes delegation available; it does not force every Codex session to use it. For an explicit one-off request, say:
+Installing the MCP server makes delegation available; it does not force every session to use it.
+
+### Codex
+
+For an explicit one-off request, say:
 
 > Delegate routine implementation and verification to `local-worker`. Keep architecture and final review in Codex.
 
 For a persistent preference, merge [`templates/AGENTS.md`](templates/AGENTS.md) into `~/.codex/AGENTS.md`. Do not overwrite an existing global instruction file without reviewing and combining the contents.
 
 Codex loads global `AGENTS.md` guidance and MCP configuration at the beginning of a new session, so restart after changing either one. See the official [Codex MCP documentation](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) and [AGENTS.md documentation](https://learn.chatgpt.com/docs/agent-configuration/agents-md).
+
+### Claude Code
+
+For an explicit one-off request, say:
+
+> Delegate routine implementation and verification to `local-worker`. Keep architecture and final review in Claude Code.
+
+For a persistent preference, merge [`templates/CLAUDE.md`](templates/CLAUDE.md) into `~/.claude/CLAUDE.md`. Do not overwrite an existing global instruction file without reviewing and combining the contents.
+
+Claude Code loads global `CLAUDE.md` guidance when a session starts, so begin a fresh session after changing it. See the official [Claude Code MCP documentation](https://code.claude.com/docs/en/mcp) and [Claude Code memory documentation](https://code.claude.com/docs/en/memory).
 
 ## How delegation behaves
 
@@ -302,11 +363,21 @@ The tests exercise configuration validation and MCP framing without downloading 
 
 ## Uninstall
 
+Remove the server from the parent agent you configured.
+
+For Codex:
+
 ```bash
 codex mcp remove local-worker
 ```
 
-Then remove the virtual environment or repository. If you merged the optional policy into `~/.codex/AGENTS.md`, remove those lines manually while preserving your other global instructions.
+For Claude Code:
+
+```bash
+claude mcp remove local-worker --scope user
+```
+
+Then remove the virtual environment or repository. If you merged the optional policy into `~/.codex/AGENTS.md` or `~/.claude/CLAUDE.md`, remove those lines manually while preserving your other global instructions.
 
 ## License
 
