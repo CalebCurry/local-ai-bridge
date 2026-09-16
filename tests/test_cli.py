@@ -10,9 +10,11 @@ from local_bridge.cli import (
     _credential_present,
     _live_probe_prompt,
     _plugin_blocks,
+    doctor,
     inspect_capabilities,
     run_live_probes,
 )
+from local_bridge.config import Config
 
 
 PROFILE = """
@@ -50,6 +52,14 @@ PROFILE = """
 
 
 class CapabilityTests(unittest.TestCase):
+    @patch("local_bridge.cli.shutil.which", return_value=None)
+    def test_doctor_explains_legacy_dsh_command(self, which: Mock) -> None:
+        output = io.StringIO()
+        with redirect_stdout(output):
+            result = doctor(Config(dsh_command="dsh"))
+        self.assertEqual(result, 1)
+        self.assertIn('dsh_command = "npx --yes @deepseek-ai/dsh"', output.getvalue())
+
     def test_plugin_blocks_honors_literal_disable(self) -> None:
         blocks = _plugin_blocks("- id: one\n  disabled: true\n- id: two\n")
         self.assertIn("disabled: true", blocks["one"])

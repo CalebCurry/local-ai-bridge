@@ -228,7 +228,16 @@ def doctor(
     print(f"Config: default_timeout_minutes={config.default_timeout_minutes}")
     print(f"Config: max_result_characters={config.max_result_characters}")
     if executable is None:
-        print(f"FAIL: executable not found: {command[0] if command else '(empty)'}")
+        attempted = command[0] if command else "(empty)"
+        print(f"FAIL: executable not found: {attempted}")
+        if attempted == "dsh":
+            print(
+                'HINT: replace dsh_command = "dsh" with '
+                'dsh_command = "npx --yes @deepseek-ai/dsh" in '
+                "~/.config/local-bridge/config.toml"
+            )
+        elif attempted == "npx":
+            print("HINT: install Node.js/npm so npx is available, or use an absolute npx path")
         return 1
     print(f"PASS: executable found: {executable}")
     try:
