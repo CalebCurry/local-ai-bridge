@@ -330,7 +330,7 @@ The live check requires proof files created by the filesystem tool, shell, publi
 
 ## Enable delegation in a project
 
-MCP registration makes the tool available in that repository; project instructions tell the parent agent when to use it. Keep this policy at repository scope so unrelated projects are unaffected.
+MCP registration makes the tool available in that repository; project instructions tell the parent agent when to use it. Keep this policy at repository scope so unrelated projects are unaffected. The supplied templates also require the parent agent to run `local-bridge doctor` before its first delegation in a session and report the results to the user; live and hosted-search probes remain explicitly controlled.
 
 ### Codex
 
