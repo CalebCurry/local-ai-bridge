@@ -12,6 +12,32 @@ The bridge is not tied to Codex. Its runtime speaks standard MCP over stdio; onl
 > [!WARNING]
 > DeepSeek Harness is currently a developer preview and may make compatibility-breaking changes. The local worker can execute commands and modify files with your user permissions. Use source control and review its changes.
 
+## Use it for a project right now
+
+Install Local AI Bridge once in its own directory; do not reinstall it inside every application repository. Start your local model server, then verify the shared installation:
+
+```bash
+/absolute/path/to/local-ai-bridge/.venv/bin/local-bridge doctor --live
+```
+
+To opt one Codex project into delegation, create `.codex/config.toml` in that project's root:
+
+```toml
+[mcp_servers.local-worker]
+command = "/absolute/path/to/local-ai-bridge/.venv/bin/local-bridge"
+args = ["serve"]
+tool_timeout_sec = 7200
+enabled_tools = ["delegate_local"]
+```
+
+Copy [`templates/AGENTS.md`](templates/AGENTS.md) into the target project's root as `AGENTS.md`. If an `AGENTS.md` already exists, merge the template into it instead of replacing it. This project file is how Codex knows to run doctor, report its status, delegate routine implementation to `local-worker`, and review the result.
+
+Start a fresh Codex session from the target project and request the feature normally:
+
+> Build the user authentication feature with tests.
+
+The bridge remains installed once, while `.codex/config.toml` and `AGENTS.md` opt in only this project. Claude Code follows the same pattern using project-scoped `.mcp.json` and `CLAUDE.md`; its exact command is included below.
+
 ## Have your agent set it up
 
 Choose your parent agent and paste the matching prompt into it. Each prompt installs the same bridge and local worker.
