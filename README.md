@@ -1,10 +1,11 @@
 # Local AI Bridge
 
-Local AI Bridge lets Codex, Claude Code, or another MCP-capable coding agent act as the high-level engineering lead while a local model performs the token-heavy work. It exposes DeepSeek Harness as one MCP tool that can inspect a repository, edit files, run tests, fix failures, and return only a short final report.
+Local AI Bridge lets Codex, Claude Code, or another MCP-capable coding agent act as the high-level engineering lead while a local model performs the token-heavy work. It exposes DeepSeek Harness through background MCP job controls, so the local worker can inspect a repository, edit files, run tests, and fix failures without blocking your conversation with the parent agent.
 
 ```text
-You → Codex or Claude Code → delegate_local → DeepSeek Harness → local model
-                                      ← short PASS/ESCALATE report ←
+You ↔ Codex or Claude Code ── start/status/result/cancel ── Local Bridge job
+                                                             ↓
+                                                    DeepSeek Harness → local model
 ```
 
 The bridge is not tied to Codex. Its runtime speaks standard MCP over stdio; only the MCP registration and instruction files differ between Codex and Claude Code. Delegation is opt-in per repository, so installing the bridge does not change how the parent agent behaves in unrelated projects. The local model keeps its exploration, command output, and repair loops in its own Harness process, while the parent agent receives the result and reviews the diff without ingesting the worker's full transcript.
@@ -26,8 +27,8 @@ To opt one Codex project into delegation, create `.codex/config.toml` in that pr
 [mcp_servers.local-worker]
 command = "/absolute/path/to/local-ai-bridge/.venv/bin/local-bridge"
 args = ["serve"]
-tool_timeout_sec = 7200
-enabled_tools = ["delegate_local"]
+tool_timeout_sec = 30
+enabled_tools = ["delegate_local_start", "delegate_local_status", "delegate_local_result", "delegate_local_cancel"]
 ```
 
 Copy [`templates/AGENTS.md`](templates/AGENTS.md) into the target project's root as `AGENTS.md`. If an `AGENTS.md` already exists, merge the template into it instead of replacing it. This project file is how Codex knows to run doctor, report its status, delegate routine implementation to `local-worker`, and review the result.
@@ -59,7 +60,7 @@ Work autonomously and verify the complete Codex → MCP → DeepSeek Harness →
 7. Configure DeepSeek Harness so its headless profile uses the chosen local model. Confirm a harmless headless prompt succeeds.
 8. Create ~/.config/local-bridge/config.toml with the correct dsh_command. Keep the other defaults unless my environment requires different values.
 9. Run local-bridge doctor, then local-bridge doctor --live, and fix any failures. Do not run the optional hosted web-search probe unless I explicitly approve possible provider usage.
-10. Register the bridge only in this project's .codex/config.toml as the local-worker STDIO MCP server. Preserve unrelated project settings. Configure startup_timeout_sec = 10, tool_timeout_sec = 7200, enable only delegate_local, and set its output_token_limit = 5000. Do not add it to ~/.codex/config.toml.
+10. Register the bridge only in this project's .codex/config.toml as the local-worker STDIO MCP server. Preserve unrelated project settings. Configure startup_timeout_sec = 10, tool_timeout_sec = 30, enable only delegate_local_start, delegate_local_status, delegate_local_result, and delegate_local_cancel, and set delegate_local_result's output_token_limit = 5000. Do not add it to ~/.codex/config.toml.
 11. Merge the bridge repository's templates/AGENTS.md guidance into this project's root AGENTS.md without overwriting existing project instructions. Do not modify ~/.codex/AGENTS.md.
 12. Run an end-to-end, read-only delegation smoke test from a fresh Codex session. Do not modify a real project during the smoke test.
 13. Report what you installed or changed, exact config paths, selected runtime/endpoint/model, test results, and anything I still need to do. Never print secrets or credential-file contents.
@@ -259,14 +260,14 @@ Create `.codex/config.toml` in the target project and add the following. If the 
 command = "/absolute/path/to/local-bridge/.venv/bin/local-bridge"
 args = ["serve"]
 startup_timeout_sec = 10
-tool_timeout_sec = 7200
-enabled_tools = ["delegate_local"]
+tool_timeout_sec = 30
+enabled_tools = ["delegate_local_start", "delegate_local_status", "delegate_local_result", "delegate_local_cancel"]
 
-[mcp_servers.local-worker.tools.delegate_local]
+[mcp_servers.local-worker.tools.delegate_local_result]
 output_token_limit = 5000
 ```
 
-Do not add this table to `~/.codex/config.toml`. Codex loads project-scoped `.codex/config.toml` only for trusted projects. The long tool timeout matters because local-model coding loops commonly exceed the default MCP timeout.
+Do not add this table to `~/.codex/config.toml`. Codex loads project-scoped `.codex/config.toml` only for trusted projects. Individual MCP calls now return quickly; the local job continues independently for up to its configured task timeout.
 
 Start a fresh Codex session from the target project, then verify the server with:
 
@@ -384,13 +385,32 @@ Commit the project instruction file if the whole team should use delegation. Oth
 
 ## How delegation behaves
 
-Each `delegate_local` call receives:
+Start a job with `delegate_local_start`, which receives:
 
 - `task` — required, self-contained instructions and acceptance criteria.
 - `workdir` — required, an absolute repository or workspace directory.
 - `max_minutes` — optional, the per-task timeout.
 
-The worker is instructed to explore, implement, test, fix failures, and review its own diff. Its successful response is limited to:
+It immediately returns a job ID. This releases the parent turn so you can continue chatting while the local model works. The remaining tools are:
+
+- `delegate_local_status` — return state, elapsed time, log growth, workspace activity, and provider-reported tokens when available.
+- `delegate_local_result` — return the final report and usage receipt once the job is terminal.
+- `delegate_local_cancel` — terminate the job's complete process group without stopping the shared model server.
+
+The legacy `delegate_local` tool remains available for compatibility but blocks the parent conversation and is intentionally excluded from the recommended Codex configuration.
+
+Background job records and logs are stored under `~/.local/state/local-bridge/jobs`. Set `LOCAL_BRIDGE_JOBS_DIR` to override that location. Do not commit this job data to an application repository.
+
+If the parent-agent session closes, manage its jobs directly:
+
+```bash
+local-bridge jobs
+local-bridge job-status <job-id>
+local-bridge job-result <job-id>
+local-bridge job-cancel <job-id>
+```
+
+The worker is instructed to begin using tools promptly, then explore, implement, test, fix failures, and review its own diff. Its successful response is limited to:
 
 ```text
 STATUS: PASS or ESCALATE
@@ -400,7 +420,7 @@ SUMMARY: at most five short lines
 BLOCKER: only when escalation is required
 ```
 
-Harness reasoning is written to its stderr stream and is intentionally excluded from successful MCP results. Diagnostics are returned only when Harness fails or times out.
+Harness reasoning is written to its job log and is intentionally excluded from successful MCP results. Status reports log growth without returning the transcript. Token usage is reported only when Harness or the configured provider emits machine-readable counters; otherwise the receipt says it is unavailable.
 
 ## Development
 
@@ -420,7 +440,7 @@ Remove the server from the parent agent you configured.
 
 For Codex:
 
-Remove the `[mcp_servers.local-worker]` and `[mcp_servers.local-worker.tools.delegate_local]` tables from the target project's `.codex/config.toml`.
+Remove the `[mcp_servers.local-worker]` and `[mcp_servers.local-worker.tools.delegate_local_result]` tables from the target project's `.codex/config.toml`.
 
 For Claude Code:
 

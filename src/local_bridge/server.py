@@ -15,7 +15,7 @@ from .config import Config
 
 
 SERVER_NAME = "local-deepseek-harness"
-SERVER_VERSION = "0.1.0"
+SERVER_VERSION = "0.2.0"
 
 
 def worker_prompt(task: str) -> str:
@@ -25,6 +25,7 @@ TASK
 {task.strip()}
 
 OPERATING RULES
+- Begin using repository tools immediately. Inspect briefly, create or edit the first useful file, then iterate; do not plan the entire implementation in prose before acting.
 - Own routine execution end to end: inspect the repository, implement, run relevant checks, fix failures, and review your diff.
 - Follow repository instructions and existing patterns. Preserve unrelated user changes.
 - Do not ask the user ordinary implementation questions. Make conservative, reversible decisions.
@@ -121,37 +122,55 @@ def run_delegate(config: Config, arguments: dict[str, Any]) -> tuple[str, bool]:
     return result, False
 
 
+def _task_schema(config: Config) -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "task": {
+                "type": "string",
+                "description": "Self-contained task and executable acceptance criteria.",
+            },
+            "workdir": {
+                "type": "string",
+                "description": "Absolute repository or workspace directory.",
+            },
+            "max_minutes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": config.max_timeout_minutes,
+                "default": config.default_timeout_minutes,
+                "description": "Hard wall-clock limit for this delegation.",
+            },
+        },
+        "required": ["task", "workdir"],
+        "additionalProperties": False,
+    }
+
+
+def _job_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "job_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Job identifier returned by delegate_local_start.",
+            }
+        },
+        "required": ["job_id"],
+        "additionalProperties": False,
+    }
+
+
 def tool_definition(config: Config) -> dict[str, Any]:
+    """Return the legacy blocking tool definition for compatibility."""
     return {
         "name": "delegate_local",
         "description": (
-            "Delegate a complete, routine coding task to a local model running in DeepSeek "
-            "Harness. Give it one chunky task with acceptance criteria and let it inspect, edit, "
-            "test, and self-review. Prefer this for token-heavy implementation, tests, lint/type "
-            "fixes, boilerplate, and obvious refactors."
+            "Compatibility-only blocking delegation. Prefer delegate_local_start so the parent "
+            "remains responsive while the local worker runs."
         ),
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "task": {
-                    "type": "string",
-                    "description": "Self-contained task and executable acceptance criteria.",
-                },
-                "workdir": {
-                    "type": "string",
-                    "description": "Absolute repository or workspace directory.",
-                },
-                "max_minutes": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": config.max_timeout_minutes,
-                    "default": config.default_timeout_minutes,
-                    "description": "Hard wall-clock limit for this delegation.",
-                },
-            },
-            "required": ["task", "workdir"],
-            "additionalProperties": False,
-        },
+        "inputSchema": _task_schema(config),
         "annotations": {
             "title": "Delegate to local coding worker",
             "readOnlyHint": False,
@@ -160,6 +179,55 @@ def tool_definition(config: Config) -> dict[str, Any]:
             "openWorldHint": False,
         },
     }
+
+
+def tool_definitions(config: Config) -> list[dict[str, Any]]:
+    mutating = {
+        "readOnlyHint": False,
+        "destructiveHint": True,
+        "idempotentHint": False,
+        "openWorldHint": False,
+    }
+    read_only = {
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+    }
+    return [
+        {
+            "name": "delegate_local_start",
+            "description": (
+                "Start a complete local coding task in the background and immediately return a "
+                "job ID. Use this instead of the blocking compatibility tool. After starting, "
+                "remain available to the user; do not busy-poll."
+            ),
+            "inputSchema": _task_schema(config),
+            "annotations": {"title": "Start local coding worker", **mutating},
+        },
+        {
+            "name": "delegate_local_status",
+            "description": (
+                "Quickly inspect a background local job: state, elapsed time, log growth, "
+                "workspace activity, and token usage when the provider exposes it."
+            ),
+            "inputSchema": _job_schema(),
+            "annotations": {"title": "Check local worker", **read_only},
+        },
+        {
+            "name": "delegate_local_result",
+            "description": "Retrieve the concise final result and usage receipt for a background local job.",
+            "inputSchema": _job_schema(),
+            "annotations": {"title": "Get local worker result", **read_only},
+        },
+        {
+            "name": "delegate_local_cancel",
+            "description": "Cancel a background local job and its entire worker process group.",
+            "inputSchema": _job_schema(),
+            "annotations": {"title": "Cancel local worker", **mutating},
+        },
+        tool_definition(config),
+    ]
 
 
 def response_for(config: Config, request: dict[str, Any]) -> dict[str, Any] | None:
@@ -177,9 +245,11 @@ def response_for(config: Config, request: dict[str, Any]) -> dict[str, Any] | No
                 "capabilities": {"tools": {"listChanged": False}},
                 "serverInfo": {"name": SERVER_NAME, "version": SERVER_VERSION},
                 "instructions": (
-                    "Use delegate_local for routine, token-heavy coding execution. Send one "
-                    "complete task, then inspect the resulting diff and concise report. Keep "
-                    "ambiguous architecture and security-sensitive judgment in the parent agent."
+                    "Use delegate_local_start for routine, token-heavy coding execution. It "
+                    "returns immediately with a job ID so you remain responsive to the user. "
+                    "Do not busy-poll; use delegate_local_status when useful and "
+                    "delegate_local_result after completion. Keep ambiguous architecture and "
+                    "security-sensitive judgment in the parent agent."
                 ),
             },
         }
@@ -189,18 +259,31 @@ def response_for(config: Config, request: dict[str, Any]) -> dict[str, Any] | No
         return {
             "jsonrpc": "2.0",
             "id": request_id,
-            "result": {"tools": [tool_definition(config)]},
+            "result": {"tools": tool_definitions(config)},
         }
     if method == "tools/call":
         params = request.get("params") or {}
-        if params.get("name") != "delegate_local":
-            output, is_error = f"Unknown tool: {params.get('name')}", True
-        else:
-            try:
+        name = params.get("name")
+        arguments = params.get("arguments") or {}
+        try:
+            if name == "delegate_local":
                 output, is_error = run_delegate(config, params.get("arguments") or {})
-            except Exception as exc:
-                output = f"Local delegation failed: {type(exc).__name__}: {exc}"
-                is_error = True
+            else:
+                from .jobs import cancel_job, job_result, job_status, start_job
+
+                if name == "delegate_local_start":
+                    output, is_error = json.dumps(start_job(config, arguments), indent=2), False
+                elif name == "delegate_local_status":
+                    output, is_error = json.dumps(job_status(arguments.get("job_id")), indent=2), False
+                elif name == "delegate_local_result":
+                    output, is_error = job_result(config, arguments.get("job_id"))
+                elif name == "delegate_local_cancel":
+                    output, is_error = json.dumps(cancel_job(arguments.get("job_id")), indent=2), False
+                else:
+                    output, is_error = f"Unknown tool: {name}", True
+        except Exception as exc:
+            output = f"Local delegation failed: {type(exc).__name__}: {exc}"
+            is_error = True
         return {
             "jsonrpc": "2.0",
             "id": request_id,

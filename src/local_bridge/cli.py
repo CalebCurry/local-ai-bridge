@@ -368,6 +368,13 @@ def parser() -> argparse.ArgumentParser:
         help="Timeout for the combined live probe (default: 300)",
     )
     subcommands.add_parser("print-config", help="Print effective configuration")
+    subcommands.add_parser("jobs", help="List background delegation jobs")
+    status_parser = subcommands.add_parser("job-status", help="Inspect a background job")
+    status_parser.add_argument("job_id")
+    result_parser = subcommands.add_parser("job-result", help="Print a background job result")
+    result_parser.add_argument("job_id")
+    cancel_parser = subcommands.add_parser("job-cancel", help="Cancel a background job")
+    cancel_parser.add_argument("job_id")
     return result
 
 
@@ -394,6 +401,24 @@ def main() -> None:
         )
     elif args.command == "print-config":
         print_config(config)
+    elif args.command in {"jobs", "job-status", "job-result", "job-cancel"}:
+        from .jobs import cancel_job, job_result, job_status, list_jobs
+
+        try:
+            if args.command == "jobs":
+                print(json.dumps(list_jobs(), indent=2))
+            elif args.command == "job-status":
+                print(json.dumps(job_status(args.job_id), indent=2))
+            elif args.command == "job-result":
+                output, is_error = job_result(config, args.job_id)
+                print(output)
+                if is_error:
+                    raise SystemExit(1)
+            else:
+                print(json.dumps(cancel_job(args.job_id), indent=2))
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            print(f"local-bridge: job error: {exc}", file=sys.stderr)
+            raise SystemExit(2) from exc
 
 
 if __name__ == "__main__":
