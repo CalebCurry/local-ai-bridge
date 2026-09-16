@@ -9,7 +9,7 @@ class ConfigTests(unittest.TestCase):
     def test_missing_file_uses_defaults(self) -> None:
         config = load_config("/definitely/missing/local-bridge.toml")
         self.assertEqual(config, Config())
-        self.assertEqual(config.dsh_command, "npx --yes @deepseek-ai/dsh")
+        self.assertEqual(config.dsh_command, "npx --offline --yes @deepseek-ai/dsh")
 
     def test_reads_supported_values(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

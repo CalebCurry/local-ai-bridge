@@ -215,12 +215,12 @@ If you run Harness through `npx`, edit `~/.config/local-bridge/config.toml` to u
 
 ```toml
 [local_bridge]
-dsh_command = "npx --yes @deepseek-ai/dsh"
+dsh_command = "npx --offline --yes @deepseek-ai/dsh"
 ```
 
-The included configuration already uses this `npx` command, so a global `dsh` executable is not required. If you intentionally install Harness globally and `dsh` is available on `PATH`, you may instead use `dsh_command = "dsh"`.
+The included configuration uses npm's offline cache because the Harness setup commands in the previous step have already downloaded the package. This avoids a registry lookup on every delegation, and a global `dsh` executable is not required. If you intentionally install Harness globally and `dsh` is available on `PATH`, you may instead use `dsh_command = "dsh"`.
 
-If an older installation reports `FAIL: executable not found: dsh`, update its existing `~/.config/local-bridge/config.toml` from `dsh_command = "dsh"` to `dsh_command = "npx --yes @deepseek-ai/dsh"`. Pulling a newer repository version does not overwrite an already-copied user configuration file.
+If an older installation reports `FAIL: executable not found: dsh`, update its existing `~/.config/local-bridge/config.toml` from `dsh_command = "dsh"` to `dsh_command = "npx --offline --yes @deepseek-ai/dsh"`. Pulling a newer repository version does not overwrite an already-copied user configuration file.
 
 Inspect the effective Harness profile and its declared capabilities:
 
@@ -313,7 +313,7 @@ No Local Bridge configuration file is required if all defaults fit your environm
 
 ```toml
 [local_bridge]
-dsh_command = "npx --yes @deepseek-ai/dsh"
+dsh_command = "npx --offline --yes @deepseek-ai/dsh"
 profile = "headless"
 default_timeout_minutes = 30
 max_result_characters = 16000
@@ -321,7 +321,7 @@ max_result_characters = 16000
 
 | Setting | Required? | Default | Purpose |
 |---|---:|---|---|
-| `dsh_command` | Optional | `npx --yes @deepseek-ai/dsh` | Command used to start Harness. Use `dsh` only when a global executable is available, or provide an absolute executable path. |
+| `dsh_command` | Optional | `npx --offline --yes @deepseek-ai/dsh` | Command used to start the already-cached Harness package without repeated registry checks. Use `dsh` only when a global executable is available, or provide an absolute executable path. |
 | `profile` | Optional | `headless` | Harness profile used for each one-shot delegated task. The shipped `headless` profile is recommended. |
 | `default_timeout_minutes` | Optional | `30` | Default wall-clock limit for one delegated task. The parent agent may request a different value, capped at 120 minutes. |
 | `max_result_characters` | Optional | `16000` | Maximum final-answer characters returned to the parent agent. Successful Harness reasoning and tool logs are discarded. |
@@ -331,7 +331,7 @@ External requirements that configuration cannot replace:
 | Requirement | Required? |
 |---|---:|
 | Python 3.11 or newer | Required |
-| A working `npx --yes @deepseek-ai/dsh` or global `dsh` command | Required |
+| A cached `npx --offline --yes @deepseek-ai/dsh` or global `dsh` command | Required |
 | A running local OpenAI-compatible model endpoint | Required |
 | A Harness provider and default model | Required |
 | Repository-level local-first instructions | Recommended |

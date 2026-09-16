@@ -233,7 +233,7 @@ def doctor(
         if attempted == "dsh":
             print(
                 'HINT: replace dsh_command = "dsh" with '
-                'dsh_command = "npx --yes @deepseek-ai/dsh" in '
+                'dsh_command = "npx --offline --yes @deepseek-ai/dsh" in '
                 "~/.config/local-bridge/config.toml"
             )
         elif attempted == "npx":

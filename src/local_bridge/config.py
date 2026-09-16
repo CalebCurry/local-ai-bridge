@@ -13,7 +13,7 @@ DEFAULT_CONFIG_PATH = Path("~/.config/local-bridge/config.toml").expanduser()
 
 @dataclass(frozen=True)
 class Config:
-    dsh_command: str = "npx --yes @deepseek-ai/dsh"
+    dsh_command: str = "npx --offline --yes @deepseek-ai/dsh"
     profile: str = "headless"
     default_timeout_minutes: int = 30
     max_result_characters: int = 16_000
@@ -52,7 +52,7 @@ def load_config(path: str | Path | None = None) -> Config:
         names = ", ".join(sorted(unknown))
         raise ValueError(f"unknown local_bridge config option(s): {names}")
 
-    dsh_command = raw.get("dsh_command", "npx --yes @deepseek-ai/dsh")
+    dsh_command = raw.get("dsh_command", "npx --offline --yes @deepseek-ai/dsh")
     profile = raw.get("profile", "headless")
     if not isinstance(dsh_command, str) or not dsh_command.strip():
         raise ValueError("dsh_command must be a non-empty string")

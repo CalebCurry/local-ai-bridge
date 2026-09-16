@@ -58,7 +58,10 @@ class CapabilityTests(unittest.TestCase):
         with redirect_stdout(output):
             result = doctor(Config(dsh_command="dsh"))
         self.assertEqual(result, 1)
-        self.assertIn('dsh_command = "npx --yes @deepseek-ai/dsh"', output.getvalue())
+        self.assertIn(
+            'dsh_command = "npx --offline --yes @deepseek-ai/dsh"',
+            output.getvalue(),
+        )
 
     def test_plugin_blocks_honors_literal_disable(self) -> None:
         blocks = _plugin_blocks("- id: one\n  disabled: true\n- id: two\n")

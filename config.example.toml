@@ -3,7 +3,7 @@
 # Optional. Command used to launch DeepSeek Harness.
 # This npx form is the default and needs no global dsh executable.
 # A global install may instead use: dsh_command = "dsh"
-dsh_command = "npx --yes @deepseek-ai/dsh"
+dsh_command = "npx --offline --yes @deepseek-ai/dsh"
 
 # Optional. Shipped Harness profile used for one-shot coding tasks.
 profile = "headless"
