@@ -32,7 +32,7 @@ Work autonomously and verify the complete Codex → MCP → DeepSeek Harness →
 6. Never download a large model without asking me first. If no working endpoint/model can be identified, ask me one concise question that includes the llama.cpp recommendation and the LM Studio/Ollama alternatives.
 7. Configure DeepSeek Harness so its headless profile uses the chosen local model. Confirm a harmless headless prompt succeeds.
 8. Create ~/.config/local-bridge/config.toml with the correct dsh_command. Keep the other defaults unless my environment requires different values.
-9. Run local-bridge doctor and fix any failures.
+9. Run local-bridge doctor, then local-bridge doctor --live, and fix any failures. Do not run the optional hosted web-search probe unless I explicitly approve possible provider usage.
 10. Register the bridge only in this project's .codex/config.toml as the local-worker STDIO MCP server. Preserve unrelated project settings. Configure startup_timeout_sec = 10, tool_timeout_sec = 7200, enable only delegate_local, and set its output_token_limit = 5000. Do not add it to ~/.codex/config.toml.
 11. Merge the bridge repository's templates/AGENTS.md guidance into this project's root AGENTS.md without overwriting existing project instructions. Do not modify ~/.codex/AGENTS.md.
 12. Run an end-to-end, read-only delegation smoke test from a fresh Codex session. Do not modify a real project during the smoke test.
@@ -55,7 +55,7 @@ Work autonomously and verify the complete Claude Code → MCP → DeepSeek Harne
 6. Never download a large model without asking me first. If no working endpoint/model can be identified, ask me one concise question that includes the llama.cpp recommendation and the LM Studio/Ollama alternatives.
 7. Configure DeepSeek Harness so its headless profile uses the chosen local model. Confirm a harmless headless prompt succeeds.
 8. Create ~/.config/local-bridge/config.toml with the correct dsh_command. Keep the other defaults unless my environment requires different values.
-9. Run local-bridge doctor and fix any failures.
+9. Run local-bridge doctor, then local-bridge doctor --live, and fix any failures. Do not run the optional hosted web-search probe unless I explicitly approve possible provider usage.
 10. Register the bridge in Claude Code as a project-scoped local-worker STDIO MCP server. Preserve all unrelated entries in this project's .mcp.json. Do not register it at user scope.
 11. Merge the bridge repository's templates/CLAUDE.md guidance into this project's root CLAUDE.md without overwriting existing project instructions. Do not modify ~/.claude/CLAUDE.md.
 12. Run an end-to-end, read-only delegation smoke test from a fresh Claude Code session. Do not modify a real project during the smoke test.
@@ -194,10 +194,22 @@ dsh_command = "npx @deepseek-ai/dsh"
 
 If `dsh` is already installed globally and available on `PATH`, the included `dsh_command = "dsh"` setting works as-is.
 
-Check the installation:
+Inspect the effective Harness profile and its declared capabilities:
 
 ```bash
 ./.venv/bin/local-bridge doctor
+```
+
+Then make the configured local model prove that it can use filesystem, shell, public web-fetch, and spawn-subagent tools. The command uses and removes an isolated temporary workspace:
+
+```bash
+./.venv/bin/local-bridge doctor --live
+```
+
+Hosted `web_search` is separate from free public URL fetching. Its shipped provider requires `DEEPSEEK_API_KEY` and may consume paid provider usage, so it is never called by the ordinary live probe. Test it only when intended:
+
+```bash
+./.venv/bin/local-bridge doctor --live --web-search
 ```
 
 ### 4. Connect your parent agent
@@ -302,11 +314,19 @@ Print the effective configuration:
 local-bridge print-config
 ```
 
-Validate the Harness executable and profile configuration:
+Audit the Harness executable, composed profile, tool availability, permission mode, approval channel, and hosted-search credential without invoking the model:
 
 ```bash
 local-bridge doctor
 ```
+
+Run an end-to-end capability test through the configured model:
+
+```bash
+local-bridge doctor --live
+```
+
+The live check requires proof files created by the filesystem tool, shell, public `web_fetch`, and a foreground child subagent. It removes the temporary workspace afterward. Use `--timeout-seconds <seconds>` to change its five-minute limit. Add `--web-search` only when a hosted search credential is configured and provider usage is acceptable.
 
 ## Enable delegation in a project
 
