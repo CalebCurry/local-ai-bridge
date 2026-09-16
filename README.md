@@ -27,6 +27,7 @@ To opt one Codex project into delegation, create `.codex/config.toml` in that pr
 [mcp_servers.local-worker]
 command = "/absolute/path/to/local-ai-bridge/.venv/bin/local-bridge"
 args = ["serve"]
+required = true
 tool_timeout_sec = 30
 enabled_tools = ["delegate_local_start", "delegate_local_status", "delegate_local_result", "delegate_local_cancel"]
 ```
@@ -261,6 +262,7 @@ command = "/absolute/path/to/local-bridge/.venv/bin/local-bridge"
 args = ["serve"]
 startup_timeout_sec = 10
 tool_timeout_sec = 30
+required = true
 enabled_tools = ["delegate_local_start", "delegate_local_status", "delegate_local_result", "delegate_local_cancel"]
 
 [mcp_servers.local-worker.tools.delegate_local_result]
@@ -269,11 +271,13 @@ output_token_limit = 5000
 
 Do not add this table to `~/.codex/config.toml`. Codex loads project-scoped `.codex/config.toml` only for trusted projects. Individual MCP calls now return quickly; the local job continues independently for up to its configured task timeout.
 
-Start a fresh Codex session from the target project, then verify the server with:
+Start a fresh Codex session from the target project. Verify that Codex loaded the project-scoped MCP layer with:
 
 ```bash
-codex mcp get local-worker
+codex doctor --json
 ```
+
+The report should show the target repository as `repo root`, `mcp servers` as at least `1`, and `mcp.config` as `ok`. In Codex CLI 0.154.0, `codex mcp get local-worker` and `codex mcp list` inspect the user-level MCP registry and can incorrectly say a project-scoped server is missing. Do not move the entry to `~/.codex/config.toml` to work around that false negative. Setting `required = true` makes a new project session fail visibly if Local Bridge cannot initialize.
 
 Ask Codex to try it:
 
